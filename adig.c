@@ -84,6 +84,10 @@
 #  define T_DNSKEY  48 /* DNS Public Key (RFC4034) */
 #endif
 
+#define T_OPT_OPCODE_APP_NAME 65001
+#define T_OPT_OPCODE_BANDWIDTH 65002
+#define T_OPT_OPCODE_LATENCY 65003
+
 struct nv {
   const char *name;
   int value;
@@ -188,6 +192,31 @@ int main(int argc, char **argv)
   fd_set read_fds, write_fds;
   struct timeval *tvp, tv;
   struct ares_addr_node *srvr, *servers = NULL;
+  char application_name [65536];
+  long strtol_temp = 0;
+  uint32_t bandwidth = 0;
+  uint32_t latency = 0;
+  char *nptr = NULL;
+  size_t length = 0;
+  struct edns_option application_name_opt = {
+    .option_code = T_OPT_OPCODE_APP_NAME,
+    .option_length = 0,
+    .option_data = NULL
+  };
+  struct edns_option bandwidth_opt = {
+    .option_code = T_OPT_OPCODE_BANDWIDTH,
+    .option_length = 0,
+    .option_data = NULL
+  };
+  struct edns_option latency_opt = {
+    .option_code = T_OPT_OPCODE_LATENCY,
+    .option_length = 0,
+    .option_data = NULL
+  };
+  int current_edns_opt = 0;
+  struct edns_option *edns_options [4] = {NULL, NULL, NULL, NULL};
+
+  *application_name = '\0';
 
 #ifdef USE_WINSOCK
   WORD wVersionRequested = MAKEWORD(USE_WINSOCK,USE_WINSOCK);
@@ -205,7 +234,7 @@ int main(int argc, char **argv)
   options.flags = ARES_FLAG_NOCHECKRESP;
   options.servers = NULL;
   options.nservers = 0;
-  while ((c = ares_getopt(argc, argv, "df:s:c:t:T:U:")) != -1)
+  while ((c = ares_getopt(argc, argv, "df:s:c:t:T:U:a:b:l:")) != -1)
     {
       switch (c)
         {
@@ -226,6 +255,76 @@ int main(int argc, char **argv)
             options.flags |= flags[i].value;
           else
             usage();
+          break;
+
+        case 'a':
+          if (*application_name != '\0') {
+            fprintf(stderr, "adig: more than one application name in argument !\n");
+            destroy_addr_list(servers);
+            return 1;
+          }
+          length = strlen(optarg);
+          if (length != (uint16_t) length) { // TODO Check this is valid
+            fprintf(stderr, "adig: application name too long %s.\n", optarg);
+            destroy_addr_list(servers);
+            return 1;
+          }
+          strncpy(application_name, optarg, 65536);
+          application_name_opt.option_code = T_OPT_OPCODE_APP_NAME;
+          application_name_opt.option_length = (uint16_t) length;
+          application_name_opt.option_data = application_name;
+          edns_options[current_edns_opt] = &application_name_opt;
+          current_edns_opt++;
+          options.ednspsz = 1280;
+          optmask |= ARES_OPT_EDNSPSZ;
+          options.flags |= ARES_FLAG_EDNS;
+          // TODO Check name is valid
+          break;
+
+        case 'b':
+          if (bandwidth) {
+            fprintf(stderr, "adig: more than one bandwidth value in argument !\n");
+            destroy_addr_list(servers);
+            return 1;
+          }
+          strtol_temp = strtol(optarg, &nptr, 10);
+          if (!nptr || *optarg == '\0' || *nptr != '\0' || strtol_temp <= 0) {
+            fprintf(stderr, "adig: invalid bandwidth value %s.\n", optarg);
+            destroy_addr_list(servers);
+            return 1;
+          }
+          bandwidth = htonl((uint32_t) strtol_temp);
+          bandwidth_opt.option_code = T_OPT_OPCODE_BANDWIDTH;
+          bandwidth_opt.option_length = sizeof(uint32_t);
+          bandwidth_opt.option_data = &bandwidth;
+          edns_options[current_edns_opt] = &bandwidth_opt;
+          current_edns_opt++;
+          options.ednspsz = 1280;
+          optmask |= ARES_OPT_EDNSPSZ;
+          options.flags |= ARES_FLAG_EDNS;
+          break;
+
+        case 'l':
+          if (latency) {
+            fprintf(stderr, "adig: more than one latency value in argument !\n");
+            destroy_addr_list(servers);
+            return 1;
+          }
+          strtol_temp = strtol(optarg, &nptr, 10);
+          if (!nptr || *optarg == '\0' || *nptr != '\0' || strtol_temp <= 0) {
+            fprintf(stderr, "adig: invalid latency value %s.\n", optarg);
+            destroy_addr_list(servers);
+            return 1;
+          }
+          latency = htonl((uint32_t) strtol_temp);
+          latency_opt.option_code = T_OPT_OPCODE_LATENCY;
+          latency_opt.option_length = sizeof(uint32_t);
+          latency_opt.option_data = &latency;
+          edns_options[current_edns_opt] = &latency_opt;
+          current_edns_opt++;
+          options.ednspsz = 1280;
+          optmask |= ARES_OPT_EDNSPSZ;
+          options.flags |= ARES_FLAG_EDNS;
           break;
 
         case 's':
@@ -357,11 +456,13 @@ int main(int argc, char **argv)
    * distinguish responses for the user when printing them out.
    */
   if (argc == 1)
-    ares_query(channel, *argv, dnsclass, type, callback, (char *) NULL);
+    ares_edns_query(channel, *argv, dnsclass, type,
+                    current_edns_opt ? edns_options : NULL, callback, (char *) NULL);
   else
     {
       for (; *argv; argv++)
-        ares_query(channel, *argv, dnsclass, type, callback, *argv);
+        ares_edns_query(channel, *argv, dnsclass, type,
+                        current_edns_opt ? edns_options : NULL, callback, *argv);
     }
 
   /* Wait for all queries to complete. */
