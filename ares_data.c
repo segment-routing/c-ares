@@ -119,6 +119,12 @@ void ares_free_data(void *dataptr)
             ares_free(ptr->data.soa_reply.hostmaster);
           break;
 
+        case ARES_DATATYPE_SRH_REPLY:
+          if (ptr->data.srh_reply.next)
+            ares_free_data(ptr->data.naptr_reply.next);
+          break;
+
+
         default:
           return;
       }
@@ -208,7 +214,17 @@ void *ares_malloc_data(ares_datatype type)
         ptr->data.soa_reply.retry = 0;
         ptr->data.soa_reply.expire = 0;
         ptr->data.soa_reply.minttl = 0;
-	break;
+        break;
+
+      case ARES_DATATYPE_SRH_REPLY:
+        ptr->data.srh_reply.next = NULL;
+        memset(&ptr->data.srh_reply.prefix.addr, 0,
+               sizeof(ptr->data.srh_reply.prefix.addr));
+        ptr->data.srh_reply.prefix.length = 0;
+        memset(&ptr->data.srh_reply.binding_segment, 0,
+               sizeof(ptr->data.srh_reply.binding_segment));
+        ptr->data.srh_reply.rr_ttl = 0;
+        break;
 
       default:
         ares_free(ptr);

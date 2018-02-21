@@ -33,6 +33,7 @@ CSOURCES = ares__close_sockets.c	\
   ares_parse_soa_reply.c		\
   ares_parse_srv_reply.c		\
   ares_parse_txt_reply.c		\
+  ares_parse_srh_reply.c		\
   ares_platform.c			\
   ares_process.c			\
   ares_query.c				\
