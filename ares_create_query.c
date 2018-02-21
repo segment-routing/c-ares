@@ -88,11 +88,22 @@ int ares_create_query(const char *name, int dnsclass, int type,
                       unsigned short id, int rd, unsigned char **bufp,
                       int *buflenp, int max_udp_size)
 {
+  return ares_create_query_edns(name, dnsclass, type, id, rd, bufp, buflenp,
+                                max_udp_size, NULL);
+}
+
+int ares_create_query_edns(const char *name, int dnsclass, int type,
+                           unsigned short id, int rd, unsigned char **bufp,
+                           int *buflenp, int max_udp_size, struct edns_option **options)
+{
   size_t len;
   unsigned char *q;
   const char *p;
   size_t buflen;
   unsigned char *buf;
+  struct edns_option *opt;
+  uint16_t cumulated_length = 0;
+  int i;
 
   /* Set our results early, in case we bail out early with an error. */
   *buflenp = 0;
@@ -104,6 +115,13 @@ int ares_create_query(const char *name, int dnsclass, int type,
    */
   len = strlen(name) + 2 + HFIXEDSZ + QFIXEDSZ +
     (max_udp_size ? EDNSFIXEDSZ : 0);
+  if (max_udp_size && options && *options) {
+    for (i = 0; (opt = options[i]); i++) {
+      /* 4 bytes are taken by the option code and its length */
+      len += opt->option_length + 4;
+      cumulated_length = (uint16_t) (cumulated_length + opt->option_length + 4);
+    }
+  }
   buf = ares_malloc(len);
   if (!buf)
     return ARES_ENOMEM;
@@ -180,7 +198,17 @@ int ares_create_query(const char *name, int dnsclass, int type,
       q++;
       DNS_RR_SET_TYPE(q, T_OPT);
       DNS_RR_SET_CLASS(q, max_udp_size);
+      DNS_RR_SET_LEN(q, cumulated_length);
       q += (EDNSFIXEDSZ-1);
+
+      /* Add EDNS options in the DNS query */
+      for (i = 0; options && (opt = options[i]); i++) {
+        DNS_OPT_SET_CODE(q, opt->option_code);
+        DNS_OPT_SET_LEN(q, opt->option_length);
+        q += 4;
+        memcpy(q, opt->option_data, opt->option_length);
+        q += opt->option_length;
+      }
   }
   buflen = (q - buf);
 

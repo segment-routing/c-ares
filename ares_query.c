@@ -111,14 +111,21 @@ unsigned short ares__generate_new_id(rc4_key* key)
 void ares_query(ares_channel channel, const char *name, int dnsclass,
                 int type, ares_callback callback, void *arg)
 {
+  ares_edns_query(channel, name, dnsclass, type, NULL, callback, arg);
+}
+
+void ares_edns_query(ares_channel channel, const char *name,
+                     int dnsclass, int type, struct edns_option **options,
+                     ares_callback callback, void *arg)
+{
   struct qquery *qquery;
   unsigned char *qbuf;
   int qlen, rd, status;
 
   /* Compose the query. */
   rd = !(channel->flags & ARES_FLAG_NORECURSE);
-  status = ares_create_query(name, dnsclass, type, channel->next_id, rd, &qbuf,
-              &qlen, (channel->flags & ARES_FLAG_EDNS) ? channel->ednspsz : 0);
+  status = ares_create_query_edns(name, dnsclass, type, channel->next_id, rd, &qbuf,
+              &qlen, (channel->flags & ARES_FLAG_EDNS) ? channel->ednspsz : 0, options);
   if (status != ARES_SUCCESS)
     {
       if (qbuf != NULL) ares_free(qbuf);

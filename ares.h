@@ -272,6 +272,12 @@ struct ares_options {
   int ednspsz;
 };
 
+struct edns_option {
+  uint16_t option_code;
+  uint16_t option_length;
+  void *option_data;
+};
+
 struct hostent;
 struct timeval;
 struct sockaddr;
@@ -401,6 +407,14 @@ CARES_EXTERN void ares_query(ares_channel channel,
                              ares_callback callback,
                              void *arg);
 
+CARES_EXTERN void ares_edns_query(ares_channel channel,
+                                  const char *name,
+                                  int dnsclass,
+                                  int type,
+                                  struct edns_option **options,
+                                  ares_callback callback,
+                                  void *arg);
+
 CARES_EXTERN void ares_search(ares_channel channel,
                               const char *name,
                               int dnsclass,
@@ -461,6 +475,16 @@ CARES_EXTERN int ares_create_query(const char *name,
                                    unsigned char **buf,
                                    int *buflen,
                                    int max_udp_size);
+
+CARES_EXTERN int ares_create_query_edns(const char *name,
+                                       int dnsclass,
+                                       int type,
+                                       unsigned short id,
+                                       int rd,
+                                       unsigned char **buf,
+                                       int *buflen,
+                                       int max_udp_size,
+                                       struct edns_option **options);
 
 CARES_EXTERN int ares_mkquery(const char *name,
                               int dnsclass,
@@ -556,6 +580,17 @@ struct ares_soa_reply {
   unsigned int minttl;
 };
 
+struct ares_srh_reply {
+  struct ares_srh_reply *next;
+  struct {
+    struct ares_in6_addr  addr;
+    unsigned char         length;
+  } prefix;
+  struct ares_in6_addr    binding_segment;
+  unsigned int            rr_ttl;
+  int                     priority;
+};
+
 /*
 ** Parse the buffer, starting at *abuf and of length alen bytes, previously
 ** obtained from an ares_search call.  Put the results in *host, if nonnull.
@@ -610,6 +645,9 @@ CARES_EXTERN int ares_parse_naptr_reply(const unsigned char* abuf,
 CARES_EXTERN int ares_parse_soa_reply(const unsigned char* abuf,
 				      int alen,
 				      struct ares_soa_reply** soa_out);
+
+CARES_EXTERN int ares_parse_srh_reply(const unsigned char *abuf, int alen,
+                                      struct ares_srh_reply **srh_out);
 
 CARES_EXTERN void ares_free_string(void *str);
 
