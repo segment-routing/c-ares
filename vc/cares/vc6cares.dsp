@@ -282,6 +282,10 @@ SOURCE=..\..\ares_parse_txt_reply.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\ares_parse_srh_reply.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\ares_platform.c
 # End Source File
 # Begin Source File
